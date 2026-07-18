@@ -1,1 +1,4 @@
-﻿Console.WriteLine("Hello, World!!");
+﻿using TCSA.Study.DataStructures;
+
+var app = new StoreApp();
+app.Run();
