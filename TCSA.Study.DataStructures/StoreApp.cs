@@ -39,6 +39,8 @@ public sealed class StoreApp
         product => product.Sku,
         StringComparer.OrdinalIgnoreCase);
 
+    private static readonly Stack<Product> RemovedProducts = new();
+
     public void Run()
     {
         bool isRunning = true;
@@ -57,6 +59,8 @@ public sealed class StoreApp
                         "Manage Products",
                         "Find Product by SKU",
                         "Manage Product Tags",
+                        "Remove Product",
+                        "Undo Last Removal",
                         "Exit"));
 
             switch (choice)
@@ -73,11 +77,83 @@ public sealed class StoreApp
                 case "Manage Product Tags":
                     ManageProductTags();
                     break;
+                case "Remove Product":
+                    RemoveProduct();
+                    break;
+                case "Undo Last Removal":
+                    UndoLastRemoval();
+                    break;
                 case "Exit":
                     isRunning = false;
                     break;
             }
         }
+    }
+
+    private static void UndoLastRemoval()
+    {
+        AnsiConsole.Clear();
+
+        if (!RemovedProducts.TryPeek(out Product? product))
+        {
+            AnsiConsole.MarkupLine("[yellow]There are no removed products to restore.[/]");
+            Pause();
+            return;
+        }
+
+        if (ProductsBySku.ContainsKey(product.Sku))
+        {
+            AnsiConsole.MarkupLine(
+                $"[red]SKU {Markup.Escape(product.Sku)} is already active.[/]");
+            Pause();
+            return;
+        }
+
+        RemovedProducts.Pop();
+        Products.Add(product);
+        ProductsBySku.Add(product.Sku, product);
+
+        AnsiConsole.MarkupLine(
+            $"[green]{Markup.Escape(product.Name)} was restored.[/]");
+        Pause();
+    }
+
+    private static void RemoveProduct()
+    {
+        AnsiConsole.Clear();
+
+        if (Products.Count == 0)
+        {
+            AnsiConsole.MarkupLine("[yellow]There are no products to remove.[/]");
+            Pause();
+            return;
+        }
+
+        string sku = AnsiConsole.Prompt(
+            new SelectionPrompt<string>()
+                .Title("Choose a product to remove:")
+                .AddChoices(Products.Select(product => product.Sku)));
+
+        Product product = ProductsBySku[sku];
+
+        bool confirmed = AnsiConsole.Confirm(
+            $"Remove {Markup.Escape(product.Name)}?");
+
+        if (!confirmed)
+        {
+            AnsiConsole.MarkupLine("[grey]Removal cancelled.[/]");
+            Pause();
+            return;
+        }
+
+        Products.Remove(product);
+        ProductsBySku.Remove(product.Sku);
+        RemovedProducts.Push(product);
+
+        AnsiConsole.MarkupLine(
+            $"[green]{Markup.Escape(product.Name)} was removed.[/]");
+        AnsiConsole.MarkupLine("[grey]You can restore it using Undo Last Removal.[/]");
+        Pause();
     }
 
     private static void ManageProductTags()
