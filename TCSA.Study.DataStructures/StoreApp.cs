@@ -34,6 +34,11 @@ public sealed class StoreApp
             }
         ];
 
+    private static readonly Dictionary<string, Product> ProductsBySku =
+    Products.ToDictionary(
+        product => product.Sku,
+        StringComparer.OrdinalIgnoreCase);
+
     public void Run()
     {
         bool isRunning = true;
@@ -50,6 +55,8 @@ public sealed class StoreApp
                     .AddChoices(
                         "View Departments",
                         "Manage Products",
+                        "Find Product by SKU",
+                        "Manage Product Tags",
                         "Exit"));
 
             switch (choice)
@@ -60,11 +67,145 @@ public sealed class StoreApp
                 case "Manage Products":
                     ShowProductMenu();
                     break;
+                case "Find Product by SKU":
+                    FindProductBySku();
+                    break;
+                case "Manage Product Tags":
+                    ManageProductTags();
+                    break;
                 case "Exit":
                     isRunning = false;
                     break;
             }
         }
+    }
+
+    private static void ManageProductTags()
+    {
+        AnsiConsole.Clear();
+
+        if (Products.Count == 0)
+        {
+            AnsiConsole.MarkupLine("[yellow]There are no products.[/]");
+            Pause();
+            return;
+        }
+
+        string sku = AnsiConsole.Prompt(
+            new SelectionPrompt<string>()
+                .Title("Choose a product:")
+                .AddChoices(Products.Select(product => product.Sku)));
+
+        Product product = ProductsBySku[sku];
+        bool returnToMainMenu = false;
+
+        while (!returnToMainMenu)
+        {
+            AnsiConsole.Clear();
+            ShowProductTags(product);
+
+            string choice = AnsiConsole.Prompt(
+                new SelectionPrompt<string>()
+                    .Title($"Manage tags for [green]{Markup.Escape(product.Name)}[/]")
+                    .AddChoices("Add Tag", "Remove Tag", "Return"));
+
+            switch (choice)
+            {
+                case "Add Tag":
+                    AddProductTag(product);
+                    break;
+                case "Remove Tag":
+                    RemoveProductTag(product);
+                    break;
+                case "Return":
+                    returnToMainMenu = true;
+                    break;
+            }
+        }
+    }
+
+    private static void ShowProductTags(Product product)
+    {
+        AnsiConsole.MarkupLine(
+            $"[green]Product Tags - {Markup.Escape(product.Name)}[/]");
+
+        if (product.Tags.Count == 0)
+        {
+            AnsiConsole.MarkupLine("[grey]No tags assigned.[/]");
+            return;
+        }
+
+        foreach (string tag in product.Tags.OrderBy(tag => tag))
+        {
+            AnsiConsole.MarkupLine($"- {Markup.Escape(tag)}");
+        }
+    }
+
+    private static void AddProductTag(Product product)
+    {
+        string tag = AnsiConsole.Ask<string>("Tag to add:").Trim();
+
+        if (string.IsNullOrWhiteSpace(tag))
+        {
+            AnsiConsole.MarkupLine("[red]A tag cannot be empty.[/]");
+        }
+        else if (product.Tags.Add(tag))
+        {
+            AnsiConsole.MarkupLine("[green]Tag added.[/]");
+        }
+        else
+        {
+            AnsiConsole.MarkupLine(
+                $"[yellow]The tag {Markup.Escape(tag)} is already assigned.[/]");
+        }
+
+        Pause();
+    }
+
+    private static void RemoveProductTag(Product product)
+    {
+        if (product.Tags.Count == 0)
+        {
+            AnsiConsole.MarkupLine("[yellow]This product has no tags.[/]");
+            Pause();
+            return;
+        }
+
+        string tag = AnsiConsole.Prompt(
+            new SelectionPrompt<string>()
+                .Title("Choose a tag to remove:")
+                .AddChoices(product.Tags.OrderBy(tag => tag)));
+
+        product.Tags.Remove(tag);
+        AnsiConsole.MarkupLine("[green]Tag removed.[/]");
+        Pause();
+    }
+    private static void FindProductBySku()
+    {
+        AnsiConsole.Clear();
+
+        string sku = AnsiConsole.Ask<string>("Enter product SKU:").Trim();
+
+        if (!ProductsBySku.TryGetValue(sku, out Product? product))
+        {
+            AnsiConsole.MarkupLine(
+                $"[yellow]No product was found with SKU {Markup.Escape(sku)}.[/]");
+            Pause();
+            return;
+        }
+
+        var table = new Table()
+            .Title("[green]Product Details[/]")
+            .AddColumn("Field")
+            .AddColumn("Value")
+            .AddRow("Name", Markup.Escape(product.Name))
+            .AddRow("SKU", Markup.Escape(product.Sku))
+            .AddRow("Department", Markup.Escape(product.Department))
+            .AddRow("Price", product.Price.ToString("C"))
+            .AddRow("Stock", product.StockQuantity.ToString());
+
+        AnsiConsole.Write(table);
+        Pause();
     }
 
     private static void ShowProductMenu()
@@ -134,9 +275,10 @@ public sealed class StoreApp
 
         string sku = AnsiConsole.Ask<string>("SKU:").Trim().ToUpperInvariant();
 
-        if (Products.Exists(product => product.Sku == sku))
+        if (ProductsBySku.ContainsKey(sku))
         {
-            AnsiConsole.MarkupLine($"[red]A product with SKU {Markup.Escape(sku)} already exists.[/]");
+            AnsiConsole.MarkupLine(
+                $"[red]A product with SKU {Markup.Escape(sku)} already exists.[/]");
             Pause();
             return;
         }
@@ -149,16 +291,17 @@ public sealed class StoreApp
         decimal price = AnsiConsole.Ask<decimal>("Price:");
         int stockQuantity = AnsiConsole.Ask<int>("Stock quantity:");
 
-        Products.Add(new Product
+        var product = new Product
         {
             Name = name,
             Sku = sku,
             Price = price,
             Department = department,
             StockQuantity = stockQuantity
-        });
+        };
 
-        AnsiConsole.MarkupLine("[green]Product added successfully.[/]");
+        Products.Add(product);
+        ProductsBySku.Add(product.Sku, product);
         Pause();
     }
 

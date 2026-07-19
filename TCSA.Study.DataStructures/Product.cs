@@ -7,4 +7,5 @@ public sealed class Product
     public decimal Price { get; set; }
     public required string Department { get; set; }
     public int StockQuantity { get; set; }
+    public HashSet<string> Tags { get; } = new(StringComparer.OrdinalIgnoreCase);
 }
